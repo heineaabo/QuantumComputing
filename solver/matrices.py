@@ -141,8 +141,14 @@ class MatrixOperator:
         strings, longest = self._convert_matrix()
         n,m = self.shape
         full = '\n'
+        upline = chr(9122)
         for i in range(n):
-            full += '| '
+            if i == 0:
+                full += '{} '.format(chr(9121))
+            elif i == n-1:
+                full += '{} '.format(chr(9123))
+            else:
+                full += '{} '.format(chr(9122))
             for j in range(m):
                 if longest > 5:
                     full += '{:^7}'.format(strings[i][j])
@@ -150,7 +156,12 @@ class MatrixOperator:
                     full += '{:^5}'.format(strings[i][j])
                 else:
                     full += '{:^3}'.format(strings[i][j])
-            full += ' |\n'
+            if i == 0:
+                full += ' {}\n'.format(chr(9124))
+            elif i == n-1:
+                full += ' {}\n'.format(chr(9126))
+            else:
+                full += ' {}\n'.format(chr(9125))
         return full
 
     def _convert(self,number):
@@ -280,11 +291,7 @@ class CNOT(MatrixOperator):
         self.matrix[2:,2:] = not_eye(2)
 
 if __name__ == '__main__':
-    r = R('x',np.pi/2)
-    rt = r.dagger()
+    x = X()
     z = Z()
-    y = Y()
-    print(y@y)
-    print((-r*z*rt)@(-r*z*rt))
-    print(CNOT())
-
+    print(z@x)
+    print(x@z)
