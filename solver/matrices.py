@@ -50,6 +50,8 @@ class MatrixOperator:
             new = MatrixOperator(matrix=np.matmul(self.matrix,other))
         elif type(other) in [int,float]:
             new = MatrixOperator(matrix=other*self.matrix)
+        elif isinstance(other,Ket):
+            new = Ket(np.matmul(self.matrix,other.vector))
         return new 
 
     def __rmul__(self,other):
@@ -290,8 +292,67 @@ class CNOT(MatrixOperator):
         self.matrix = np.eye(4)
         self.matrix[2:,2:] = not_eye(2)
 
+class Vector:
+    def __init__(self):
+        self.shape = [1,1]
+        self.vector = np.array(self.shape,dtype = complex)
+        self.type = None
+
+    def __str__(self):
+        return str(self.vector)
+
+class Bra(Vector):
+    def __init__(self,array):
+        super().__init__()
+        self.shape = [1,len(array)]
+        self.vector = np.array(array)
+        self.type = 'bra'
+
+    def dagger(self):
+        new = Ket(self.vector.conj())
+        return new
+
+
+    def __mul__(self,other):
+        if isinstance(other,Ket):
+            if np.array_equal(self.vector,other.vector.conj()):
+                return 1
+            else:
+                return 0
+        if isinstance(other,MatrixOperator):
+            new = Ket(np.matmul(self.vector,other.matrix))
+            return new
+
+        
+class Ket(Vector):
+    def __init__(self,array):
+        super().__init__()
+        self.shape = [len(array),1]
+        self.vector = np.array(array)
+        self.type = 'ket'
+
+    def __mul__(self,other):
+        if isinstance(other,Bra):
+            new = Ket(np.kron(self.vector,other.vector))
+            return new
+        elif isinstance(other,int) or isinstance(other,float):
+            self.vector = self.vector*other
+            return other
+
+    def __rmul__(self,other):
+        if isinstance(other,Bra):
+            if np.array_equal(self.vector,other.vector.conj()):
+                return 1
+            else:
+                return 0
+        if isinstance(other,MatrixOperator):
+            new = Ket(np.matmul(other.matrix,self.vector))
+            return new
+
+    def dagger(self):
+        new = Bra(self.vector.conj())
+        return new
 if __name__ == '__main__':
-    x = X()
-    z = Z()
-    print(z@x)
-    print(x@z)
+    r1 = R('x',4)
+    r2 = R('x',2)
+    print(r1@r2)
