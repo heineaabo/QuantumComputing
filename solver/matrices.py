@@ -289,8 +289,16 @@ class CNOT(MatrixOperator):
     def __init__(self):
         super().__init__()
         self.shape = [4,4]
-        self.matrix = np.eye(4)
+        self.matrix = np.eye(4,dtype=complex)
         self.matrix[2:,2:] = not_eye(2)
+
+class CU(MatrixOperator):
+    def __init__(self,U):
+        super().__init__()
+        self.shape = [4,4]
+        self.matrix = np.eye(4,dtype=complex)
+        self.matrix[2:,2:] = U
+
 
 class Vector:
     def __init__(self):

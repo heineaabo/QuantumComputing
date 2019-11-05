@@ -44,17 +44,15 @@ class QCheisenberg:
             n_work = self.n_work
             n_simulation=self.n_simulation
             n_qubits=self.n_qubits
+            ancilla = n_qubits -1
             Emax=self.Emax
             qb = self.qb
             cb = self.cb
             qz = self.qz
-            for q_state in range(0,n_simulation):
-                qz.crz(dt*h0,qb[control_qubit],qb[q_state+n_work])
 
-            qz.cu1(Emax*dt,qb[control_qubit],qb[n_work])
-            qz.x(qb[n_work])
-            qz.cu1(Emax*dt,qb[control_qubit],qb[n_work])
-            qz.x(qb[n_work])
+
+            for i in range(n_work,ancilla):
+                qz.crz(2*dt*h0,qb[control_qubit],qb[i])
 
             self.qb = qb
             self.cb = cb
@@ -74,40 +72,58 @@ class QCheisenberg:
             qb = self.qb
             cb = self.cb
             qz = self.qz
+
+            ind = list(range(n_work,n_qubits))
+            ind[-1] = n_work
+
+            ind = [7,8]
             
-            for i in range(n_work,ancilla-1):
-                # Fourth sum
-                qz.cx(qb[i],qb[ancilla])
-                qz.cx(qb[i+1],qb[ancilla])
-                qz.crz(dt,qb[control_qubit],qb[ancilla])
-                qz.cx(qb[i+1],qb[ancilla])
-                qz.cx(qb[i],qb[ancilla])
-            #for i in range(n_work,ancilla-1):
-                # Third sum
-                qz.crz(np.pi/2,qb[i+1],qb[ancilla])
-                qz.crz(np.pi/2,qb[i],qb[ancilla]) 
-                qz.ch(qb[i],qb[ancilla])
-                qz.ch(qb[i+1],qb[ancilla])
-                qz.cx(qb[i],qb[ancilla])
-                qz.cx(qb[i+1],qb[ancilla])
-                qz.crz(dt,qb[control_qubit],qb[ancilla])
-                qz.cx(qb[i+1],qb[ancilla])
-                qz.cx(qb[i],qb[ancilla])
-                qz.ch(qb[i+1],qb[ancilla])
-                qz.ch(qb[i],qb[ancilla])
-                qz.crz(-np.pi/2,qb[i],qb[ancilla]) 
-                qz.crz(-np.pi/2,qb[i+1],qb[ancilla])
-            #for i in range(n_work,ancilla-1):
-                # Second sum
-                qz.ch(qb[i],qb[ancilla])
-                qz.ch(qb[i+1],qb[ancilla])
-                qz.cx(qb[i],qb[ancilla])
-                qz.cx(qb[i+1],qb[ancilla])
-                qz.crz(dt,qb[control_qubit],qb[ancilla])
-                qz.cx(qb[i+1],qb[ancilla])
-                qz.cx(qb[i],qb[ancilla])
-                qz.ch(qb[i+1],qb[ancilla])
-                qz.ch(qb[i],qb[ancilla])
+            for i,q in enumerate(ind[:-1]):
+                # X 
+                
+                qz.h(qb[ind[i]])
+                qz.h(qb[ind[i+1]])
+                
+                qz.cx(qb[ind[i]],qb[-1])
+                qz.cx(qb[ind[i+1]],qb[-1])
+                
+                qz.crz(dt,qb[control_qubit],qb[-1])
+                
+                qz.cx(qb[ind[i+1]],qb[-1])
+                qz.cx(qb[ind[i]],qb[-1])
+                
+                qz.h(qb[ind[i+1]])
+                qz.h(qb[ind[i]])
+                
+                # Y 
+
+                qz.rz(-np.pi/2,qb[ind[i+1]])
+                qz.rz(-np.pi/2,qb[ind[i]]) 
+                qz.h(qb[ind[i]])
+                qz.h(qb[ind[i+1]])
+                
+                qz.cx(qb[ind[i]],qb[-1])
+                qz.cx(qb[ind[i+1]],qb[-1])
+                
+                qz.crz(dt,qb[control_qubit],qb[-1])
+                
+                qz.cx(qb[ind[i+1]],qb[-1])
+                qz.cx(qb[ind[i]],qb[-1])
+
+                qz.h(qb[ind[i+1]])
+                qz.h(qb[ind[i]])
+                qz.rz(np.pi/2,qb[ind[i]]) 
+                qz.rz(np.pi/2,qb[i+1])
+            
+                # Z 
+                
+                qz.cx(qb[ind[i]],qb[-1])
+                qz.cx(qb[ind[i+1]],qb[-1])
+                
+                qz.crz(dt,qb[control_qubit],qb[-1])
+                
+                qz.cx(qb[ind[i+1]],qb[-1])
+                qz.cx(qb[ind[i]],qb[-1])
 
             self.qb = qb
             self.cb = cb
@@ -123,6 +139,7 @@ class QCheisenberg:
             n_work = self.n_work
             n_simulation = self.n_simulation
             n_qubits = self.n_qubits
+            Emax = self.Emax
             dt = self.dt
             h0 = self.h0
             qb = self.qb
@@ -138,12 +155,17 @@ class QCheisenberg:
             for cq in range(n_work):
                 qz.h(qb[cq])
             for cq in range(n_work,n_qubits-1):
-                qz.rx(np.pi/2,qb[cq])
+                #qz.rx(np.pi/2,qb[cq])
+                qz.h(qb[cq])
+
+            #qz.h(qb[n_work])
+            #qz.cx(qb[n_work],qb[n_work+1])
 
             for cq in range(n_work):
                 for j in range(int(t/dt)):
-                    self.H0((2**cq)*dt,cq)
+                    #self.H0((2**cq)*dt,cq)
                     self.H1((2**cq)*dt,cq)
+                    qz.u1(Emax*(2**cq)*dt,qb[cq])
 
             self.qb = qb
             self.cb = cb
@@ -161,7 +183,7 @@ class QCheisenberg:
             qb = self.qb
             cb = self.cb
             qz = self.qz
-            for cq in range(int(n_work/2)):
+            for cq in range(n_work//2):
                 qz.swap(qb[cq],qb[n_work-cq-1])
             for cq in range(n_work):
                 for i in range(cq):
