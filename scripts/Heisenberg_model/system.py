@@ -5,6 +5,7 @@ class Model:
     def __init__(self,n_work,n_simulation,n_ancilla,Emax,*argv):
         self.w = n_work
         self.s = n_simulation
+        self.a = n_ancilla
         self.N = n_work + n_simulation + n_ancilla
         self.qb = qk.QuantumRegister(self.N)
         self.cb = qk.ClassicalRegister(self.N)
@@ -29,7 +30,7 @@ class Model:
         x = [] # phase
         y = [] # hits
         for key,val in result.items():
-            eigenstate = key[:self.N-self.w]
+            eigenstate = key[self.a:self.s+self.a]
             phi = key[self.N-self.w:]
             phi = phi[::-1]
             x.append(self.Emax - 2*np.pi*self.toPhase(phi)/t)
@@ -57,6 +58,60 @@ class Model:
         self.plotY = y_
         self.result = result
         return self
+    
+######################
+## Heisenberg model ##
+######################    
+class Heisenberg(Model):
+    def __init__(self,*args):
+        super().__init__(*args)
+        self.h0 = self.args[0]
+        self.ansatz()
+    
+    def __call__(self,ctrl,dt):
+        qc = self.qc
+        qb = self.qb
+        w = self.w
+        h0 = self.h0
+        Emax = self.Emax
+        
+        ### ONEBODY ###
+        #qc.crz(h0*dt,qb[ctrl],qb[w+0])
+        #qc.crz(h0*dt,qb[ctrl],qb[w+1])
+
+        ### TWOBODY ###
+        ##### X #####
+        qc.cx(qb[w+1],qb[w+0])
+        qc.h(qb[w+1])
+        qc.crz(2*dt,qb[ctrl],qb[w+1])
+        qc.h(qb[w+1])
+        qc.cx(qb[w+1],qb[w+0])
+        ##### Y #####
+        qc.rz(np.pi/2,qb[w+0])
+        qc.rz(np.pi/2,qb[w+1])
+        qc.cx(qb[w+1],qb[w+0])
+        qc.h(qb[w+1])
+        qc.crz(2*dt,qb[ctrl],qb[w+1])
+        qc.h(qb[w+1])
+        qc.cx(qb[w+1],qb[w+0])
+        qc.rz(-np.pi/2,qb[w+0])
+        qc.rz(-np.pi/2,qb[w+1])
+        ##### Z #####
+        qc.cx(qb[w+1],qb[w+0])
+        qc.crz(2*dt,qb[ctrl],qb[w+0])
+        qc.cx(qb[w+1],qb[w+0])
+        
+        qc.u1(Emax*dt,qb[ctrl])
+
+        self.qc = qc
+        self.qb = qb
+        
+        return self
+    
+    def ansatz(self):
+        for i in range(self.s):
+            self.qc.h(self.qb[self.w+i])
+        return None
 
 #####################
 ### Pairing model ###
@@ -69,13 +124,13 @@ class Pairing(Model):
         self.ansatz()
     
     def __call__(self,control_qubit,dt):
+        
         n_work = self.w
         n_simulation = self.s
         n_qubits = self.N
         g = self.g
         delta = self.delta
         Emax = self.Emax
-
         qz = self.qc
         qb = self.qb
         
@@ -305,7 +360,12 @@ class Pairing(Model):
         return self
     
     def ansatz(self):
+        qc = self.qc
+        qb = self.qb
+        w = self.w
         for i in range(0,self.s,2):
-            self.qc.h(self.qb[self.w+i])
-            self.qc.cx(self.qb[self.w+i],self.qb[self.w+i+1])
+            qc.h(qb[w+i])
+            qc.cx(qb[w+i],qb[w+i+1])
+        self.qc = qc
+        self.qb = qb
         return None
