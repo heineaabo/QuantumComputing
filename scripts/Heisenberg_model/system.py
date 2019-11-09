@@ -22,9 +22,9 @@ class Model:
             phase += (2**(-i-1))*int(c)
         return phase
         
-    def measure(self,t):
+    def measurePhase(self,t,shots=1024):
         self.qc.measure(self.qb,self.cb)
-        job = qk.execute(self.qc, backend = qk.Aer.get_backend('qasm_simulator'), shots=1024)
+        job = qk.execute(self.qc, backend = qk.Aer.get_backend('qasm_simulator'), shots=shots)
         #qk.tools.monitor.job_monitor(job)
         result = job.result().get_counts(self.qc)
         x = [] # phase
@@ -32,7 +32,6 @@ class Model:
         for key,val in result.items():
             eigenstate = key[self.a:self.s+self.a]
             phi = key[self.N-self.w:]
-            phi = phi[::-1]
             x.append(self.Emax - 2*np.pi*self.toPhase(phi)/t)
             y.append(val)
         x = np.array(x)
@@ -76,17 +75,17 @@ class Heisenberg(Model):
         Emax = self.Emax
         
         ### ONEBODY ###
-        #qc.crz(h0*dt,qb[ctrl],qb[w+0])
-        #qc.crz(h0*dt,qb[ctrl],qb[w+1])
+        qc.crz(2*h0*dt,qb[ctrl],qb[w+0])
+        qc.crz(2*h0*dt,qb[ctrl],qb[w+1])
 
         ### TWOBODY ###
-        ##### X #####
+        ###### X ######
         qc.cx(qb[w+1],qb[w+0])
         qc.h(qb[w+1])
         qc.crz(2*dt,qb[ctrl],qb[w+1])
         qc.h(qb[w+1])
         qc.cx(qb[w+1],qb[w+0])
-        ##### Y #####
+        ###### Y ######
         qc.rz(np.pi/2,qb[w+0])
         qc.rz(np.pi/2,qb[w+1])
         qc.cx(qb[w+1],qb[w+0])
@@ -96,7 +95,29 @@ class Heisenberg(Model):
         qc.cx(qb[w+1],qb[w+0])
         qc.rz(-np.pi/2,qb[w+0])
         qc.rz(-np.pi/2,qb[w+1])
-        ##### Z #####
+        ###### Z ######
+        qc.cx(qb[w+1],qb[w+0])
+        qc.crz(2*dt,qb[ctrl],qb[w+0])
+        qc.cx(qb[w+1],qb[w+0])
+        
+        ## Periodic boundaries
+        
+        qc.cx(qb[w+1],qb[w+0])
+        qc.h(qb[w+1])
+        qc.crz(2*dt,qb[ctrl],qb[w+1])
+        qc.h(qb[w+1])
+        qc.cx(qb[w+1],qb[w+0])
+        ###### Y ######
+        qc.rz(np.pi/2,qb[w+0])
+        qc.rz(np.pi/2,qb[w+1])
+        qc.cx(qb[w+1],qb[w+0])
+        qc.h(qb[w+1])
+        qc.crz(2*dt,qb[ctrl],qb[w+1])
+        qc.h(qb[w+1])
+        qc.cx(qb[w+1],qb[w+0])
+        qc.rz(-np.pi/2,qb[w+0])
+        qc.rz(-np.pi/2,qb[w+1])
+        ###### Z ######
         qc.cx(qb[w+1],qb[w+0])
         qc.crz(2*dt,qb[ctrl],qb[w+0])
         qc.cx(qb[w+1],qb[w+0])
@@ -108,9 +129,24 @@ class Heisenberg(Model):
         
         return self
     
-    def ansatz(self):
-        for i in range(self.s):
-            self.qc.h(self.qb[self.w+i])
+    def ansatz(self, method='pe',theta=None):
+        if method.lower() == 'pe':
+            for i in range(self.s):
+                self.qc.h(self.qb[self.w+i])
+            for i in range(self.s-1):
+                self.qc.cx(self.qb[self.w+i],self.qb[self.w+i+1])
+            #for i in range(self.s):
+                #if i < self.s-1:
+                #    self.qc.cx(self.qb[self.w+i],self.qb[self.w+i+1])
+                #else:
+                #    self.qc.cx(self.qb[self.w+i],self.qb[self.w])
+        if method.lower() == 'vqe':
+            for i in range(self.s):
+                self.qc.ry(theta[i],self.qb[self.w+i])
+                if i < self.s-1:
+                    self.qc.cx(self.qb[self.w+i],self.qb[self.w+i+1])
+                else:
+                    self.qc.cx(self.qb[self.w+i],self.qb[self.w])
         return None
 
 #####################
@@ -135,226 +171,225 @@ class Pairing(Model):
         qb = self.qb
         
         s_state = 0
-
         for q_state in range(0,n_simulation):
             if q_state % 2 == 0:
                 s_state += 1
             qz.crz(dt*delta*(s_state - 1),qb[control_qubit],qb[q_state+n_work])
 
-            qz.cu1(-dt*delta*(1/8)*(n_simulation-2)*n_simulation,qb[control_qubit],qb[n_work])
-            qz.x(qb[n_work])
-            qz.cu1(-dt*delta*(1/8)*(n_simulation-2)*n_simulation,qb[control_qubit],qb[n_work])
-            qz.x(qb[n_work])
+        qz.cu1(-dt*delta*(1/8)*(n_simulation-2)*n_simulation,qb[control_qubit],qb[n_work])
+        qz.x(qb[n_work])
+        qz.cu1(-dt*delta*(1/8)*(n_simulation-2)*n_simulation,qb[control_qubit],qb[n_work])
+        qz.x(qb[n_work])
 
-            qz.cu1(Emax*dt,qb[control_qubit],qb[n_work])
-            qz.x(qb[n_work])
-            qz.cu1(Emax*dt,qb[control_qubit],qb[n_work])
-            qz.x(qb[n_work])
+        qz.cu1(Emax*dt,qb[control_qubit],qb[n_work])
+        qz.x(qb[n_work])
+        qz.cu1(Emax*dt,qb[control_qubit],qb[n_work])
+        qz.x(qb[n_work])
 
 
-            for p in range(1,n_simulation,2):
-                for q in range(p,n_simulation,2):
-                    if p == q:
-                        theta = -2*(1/8)*g*dt
-                        qz.cu1(-theta/2,qb[control_qubit],qb[n_work])
-                        qz.x(qb[n_work])
-                        qz.cu1(-theta/2,qb[control_qubit],qb[n_work])
-                        qz.x(qb[n_work])
+        for p in range(1,n_simulation,2):
+            for q in range(p,n_simulation,2):
+                if p == q:
+                    theta = -2*(1/8)*g*dt
+                    qz.cu1(-theta/2,qb[control_qubit],qb[n_work])
+                    qz.x(qb[n_work])
+                    qz.cu1(-theta/2,qb[control_qubit],qb[n_work])
+                    qz.x(qb[n_work])
 
-                        qz.crz(theta,qb[control_qubit],qb[p-1+n_work])
-                        qz.crz(theta,qb[control_qubit],qb[p+n_work])
+                    qz.crz(theta,qb[control_qubit],qb[p-1+n_work])
+                    qz.crz(theta,qb[control_qubit],qb[p+n_work])
 
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.crz(theta,qb[control_qubit],qb[n_qubits-1])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                    else:
-                        theta = -2*(1/16)*g*dt
-                        #FIRST TERM:
-                        qz.h(qb[p-1+n_work])
-                        qz.h(qb[p+n_work])
-                        qz.h(qb[q-1+n_work])
-                        qz.h(qb[q+n_work])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q+n_work],qb[n_qubits-1])
-                        qz.crz(theta,qb[control_qubit],qb[n_qubits-1])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q+n_work],qb[n_qubits-1])
-                        qz.h(qb[p-1+n_work])
-                        qz.h(qb[p+n_work])
-                        qz.h(qb[q-1+n_work])
-                        qz.h(qb[q+n_work])
-                        ############
-                        #SECOND TERM:
-                        qz.h(qb[p-1+n_work])
-                        qz.h(qb[p+n_work])
-                        qz.rz(np.pi/2,qb[q-1+n_work])
-                        qz.h(qb[q-1+n_work])
-                        qz.rz(np.pi/2,qb[q+n_work])
-                        qz.h(qb[q+n_work])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q+n_work],qb[n_qubits-1])
-                        qz.crz(-theta,qb[control_qubit],qb[n_qubits-1])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q+n_work],qb[n_qubits-1])
-                        qz.h(qb[p-1+n_work])
-                        qz.h(qb[p+n_work])
-                        qz.h(qb[q-1+n_work])
-                        qz.rz(-np.pi/2,qb[q-1+n_work])
-                        qz.h(qb[q+n_work])
-                        qz.rz(-np.pi/2,qb[q+n_work])
-                        ###########
-                        #THIRD TERM:
-                        qz.h(qb[p-1+n_work])
-                        qz.rz(np.pi/2,qb[p+n_work])
-                        qz.h(qb[p+n_work])
-                        qz.h(qb[q-1+n_work])
-                        qz.rz(np.pi/2,qb[q+n_work])
-                        qz.h(qb[q+n_work])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q+n_work],qb[n_qubits-1])
-                        qz.crz(theta,qb[control_qubit],qb[n_qubits-1])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q+n_work],qb[n_qubits-1])
-                        qz.h(qb[p-1+n_work])
-                        qz.h(qb[p+n_work])
-                        qz.rz(-np.pi/2,qb[p+n_work])
-                        qz.h(qb[q-1+n_work])
-                        qz.h(qb[q+n_work])
-                        qz.rz(-np.pi/2,qb[q+n_work])
-                        ###########
-                        #FOURTH TERM
-                        qz.h(qb[p-1+n_work])
-                        qz.rz(np.pi/2,qb[p+n_work])
-                        qz.h(qb[p+n_work])
-                        qz.rz(np.pi/2,qb[q-1+n_work])
-                        qz.h(qb[q-1+n_work])
-                        qz.h(qb[q+n_work])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q+n_work],qb[n_qubits-1])
-                        qz.crz(theta,qb[control_qubit],qb[n_qubits-1])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q+n_work],qb[n_qubits-1])
-                        qz.h(qb[p-1+n_work])
-                        qz.h(qb[p+n_work])
-                        qz.rz(-np.pi/2,qb[p+n_work])
-                        qz.h(qb[q-1+n_work])
-                        qz.rz(-np.pi/2,qb[q-1+n_work])
-                        qz.h(qb[q+n_work])
-                        ###########
-                        #FIFTH TERM
-                        qz.rz(np.pi/2,qb[p-1+n_work])
-                        qz.h(qb[p-1+n_work])
-                        qz.h(qb[p+n_work])
-                        qz.h(qb[q-1+n_work])
-                        qz.rz(np.pi/2,qb[q+n_work])
-                        qz.h(qb[q+n_work])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q+n_work],qb[n_qubits-1])
-                        qz.crz(theta,qb[control_qubit],qb[n_qubits-1])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q+n_work],qb[n_qubits-1])
-                        qz.h(qb[p-1+n_work])
-                        qz.rz(-np.pi/2,qb[p-1+n_work])
-                        qz.h(qb[p+n_work])
-                        qz.h(qb[q-1+n_work])
-                        qz.h(qb[q+n_work])
-                        qz.rz(-np.pi/2,qb[q+n_work])
-                        ##########
-                        #SIXTH TERM:
-                        qz.rz(np.pi/2,qb[p-1+n_work])
-                        qz.h(qb[p-1+n_work])
-                        qz.h(qb[p+n_work])
-                        qz.rz(np.pi/2,qb[q-1+n_work])
-                        qz.h(qb[q-1+n_work])
-                        qz.h(qb[q+n_work])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q+n_work],qb[n_qubits-1])
-                        qz.crz(theta,qb[control_qubit],qb[n_qubits-1])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q+n_work],qb[n_qubits-1])
-                        qz.h(qb[p-1+n_work])
-                        qz.rz(-np.pi/2,qb[p-1+n_work])
-                        qz.h(qb[p+n_work])
-                        qz.h(qb[q-1+n_work])
-                        qz.rz(-np.pi/2,qb[q-1+n_work])
-                        qz.h(qb[q+n_work])
-                        #######################
-                        #SEVENTH TERM
-                        qz.rz(np.pi/2,qb[p-1+n_work])
-                        qz.h(qb[p-1+n_work])
-                        qz.rz(np.pi/2,qb[p+n_work])
-                        qz.h(qb[p+n_work])
-                        qz.h(qb[q-1+n_work])
-                        qz.h(qb[q+n_work])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q+n_work],qb[n_qubits-1])
-                        qz.crz(-theta,qb[control_qubit],qb[n_qubits-1])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q+n_work],qb[n_qubits-1])
-                        qz.h(qb[p-1+n_work])
-                        qz.rz(-np.pi/2,qb[p-1+n_work])
-                        qz.h(qb[p+n_work])
-                        qz.rz(-np.pi/2,qb[p+n_work])
-                        qz.h(qb[q-1+n_work])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.crz(theta,qb[control_qubit],qb[n_qubits-1])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                else:
+                    theta = -2*(1/16)*g*dt
+                    #FIRST TERM:
+                    qz.h(qb[p-1+n_work])
+                    qz.h(qb[p+n_work])
+                    qz.h(qb[q-1+n_work])
+                    qz.h(qb[q+n_work])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q+n_work],qb[n_qubits-1])
+                    qz.crz(theta,qb[control_qubit],qb[n_qubits-1])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q+n_work],qb[n_qubits-1])
+                    qz.h(qb[p-1+n_work])
+                    qz.h(qb[p+n_work])
+                    qz.h(qb[q-1+n_work])
+                    qz.h(qb[q+n_work])
+                    ############
+                    #SECOND TERM:
+                    qz.h(qb[p-1+n_work])
+                    qz.h(qb[p+n_work])
+                    qz.rz(np.pi/2,qb[q-1+n_work])
+                    qz.h(qb[q-1+n_work])
+                    qz.rz(np.pi/2,qb[q+n_work])
+                    qz.h(qb[q+n_work])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q+n_work],qb[n_qubits-1])
+                    qz.crz(-theta,qb[control_qubit],qb[n_qubits-1])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q+n_work],qb[n_qubits-1])
+                    qz.h(qb[p-1+n_work])
+                    qz.h(qb[p+n_work])
+                    qz.h(qb[q-1+n_work])
+                    qz.rz(-np.pi/2,qb[q-1+n_work])
+                    qz.h(qb[q+n_work])
+                    qz.rz(-np.pi/2,qb[q+n_work])
+                    ###########
+                    #THIRD TERM:
+                    qz.h(qb[p-1+n_work])
+                    qz.rz(np.pi/2,qb[p+n_work])
+                    qz.h(qb[p+n_work])
+                    qz.h(qb[q-1+n_work])
+                    qz.rz(np.pi/2,qb[q+n_work])
+                    qz.h(qb[q+n_work])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q+n_work],qb[n_qubits-1])
+                    qz.crz(theta,qb[control_qubit],qb[n_qubits-1])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q+n_work],qb[n_qubits-1])
+                    qz.h(qb[p-1+n_work])
+                    qz.h(qb[p+n_work])
+                    qz.rz(-np.pi/2,qb[p+n_work])
+                    qz.h(qb[q-1+n_work])
+                    qz.h(qb[q+n_work])
+                    qz.rz(-np.pi/2,qb[q+n_work])
+                    ###########
+                    #FOURTH TERM
+                    qz.h(qb[p-1+n_work])
+                    qz.rz(np.pi/2,qb[p+n_work])
+                    qz.h(qb[p+n_work])
+                    qz.rz(np.pi/2,qb[q-1+n_work])
+                    qz.h(qb[q-1+n_work])
+                    qz.h(qb[q+n_work])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q+n_work],qb[n_qubits-1])
+                    qz.crz(theta,qb[control_qubit],qb[n_qubits-1])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q+n_work],qb[n_qubits-1])
+                    qz.h(qb[p-1+n_work])
+                    qz.h(qb[p+n_work])
+                    qz.rz(-np.pi/2,qb[p+n_work])
+                    qz.h(qb[q-1+n_work])
+                    qz.rz(-np.pi/2,qb[q-1+n_work])
+                    qz.h(qb[q+n_work])
+                    ###########
+                    #FIFTH TERM
+                    qz.rz(np.pi/2,qb[p-1+n_work])
+                    qz.h(qb[p-1+n_work])
+                    qz.h(qb[p+n_work])
+                    qz.h(qb[q-1+n_work])
+                    qz.rz(np.pi/2,qb[q+n_work])
+                    qz.h(qb[q+n_work])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q+n_work],qb[n_qubits-1])
+                    qz.crz(theta,qb[control_qubit],qb[n_qubits-1])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q+n_work],qb[n_qubits-1])
+                    qz.h(qb[p-1+n_work])
+                    qz.rz(-np.pi/2,qb[p-1+n_work])
+                    qz.h(qb[p+n_work])
+                    qz.h(qb[q-1+n_work])
+                    qz.h(qb[q+n_work])
+                    qz.rz(-np.pi/2,qb[q+n_work])
+                    ##########
+                    #SIXTH TERM:
+                    qz.rz(np.pi/2,qb[p-1+n_work])
+                    qz.h(qb[p-1+n_work])
+                    qz.h(qb[p+n_work])
+                    qz.rz(np.pi/2,qb[q-1+n_work])
+                    qz.h(qb[q-1+n_work])
+                    qz.h(qb[q+n_work])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q+n_work],qb[n_qubits-1])
+                    qz.crz(theta,qb[control_qubit],qb[n_qubits-1])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q+n_work],qb[n_qubits-1])
+                    qz.h(qb[p-1+n_work])
+                    qz.rz(-np.pi/2,qb[p-1+n_work])
+                    qz.h(qb[p+n_work])
+                    qz.h(qb[q-1+n_work])
+                    qz.rz(-np.pi/2,qb[q-1+n_work])
+                    qz.h(qb[q+n_work])
+                    #######################
+                    #SEVENTH TERM
+                    qz.rz(np.pi/2,qb[p-1+n_work])
+                    qz.h(qb[p-1+n_work])
+                    qz.rz(np.pi/2,qb[p+n_work])
+                    qz.h(qb[p+n_work])
+                    qz.h(qb[q-1+n_work])
+                    qz.h(qb[q+n_work])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q+n_work],qb[n_qubits-1])
+                    qz.crz(-theta,qb[control_qubit],qb[n_qubits-1])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q+n_work],qb[n_qubits-1])
+                    qz.h(qb[p-1+n_work])
+                    qz.rz(-np.pi/2,qb[p-1+n_work])
+                    qz.h(qb[p+n_work])
+                    qz.rz(-np.pi/2,qb[p+n_work])
+                    qz.h(qb[q-1+n_work])
 
-                        qz.h(qb[q+n_work])
-                        ##############
-                        #EIGTH TERM:
-                        qz.rz(np.pi/2,qb[p-1+n_work])
-                        qz.h(qb[p-1+n_work])
-                        qz.rz(np.pi/2,qb[p+n_work])
-                        qz.h(qb[p+n_work])
-                        qz.rz(np.pi/2,qb[q-1+n_work])
-                        qz.h(qb[q-1+n_work])
-                        qz.rz(np.pi/2,qb[q+n_work])
-                        qz.h(qb[q+n_work])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q+n_work],qb[n_qubits-1])
-                        qz.crz(theta,qb[control_qubit],qb[n_qubits-1])
-                        qz.cx(qb[p-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[p+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q-1+n_work],qb[n_qubits-1])
-                        qz.cx(qb[q+n_work],qb[n_qubits-1])
-                        qz.h(qb[p-1+n_work])
-                        qz.rz(-np.pi/2,qb[p-1+n_work])
-                        qz.h(qb[p+n_work])
-                        qz.rz(-np.pi/2,qb[p+n_work])
-                        qz.h(qb[q-1+n_work])
-                        qz.rz(-np.pi/2,qb[q-1+n_work])
-                        qz.h(qb[q+n_work])
-                        qz.rz(-np.pi/2,qb[q+n_work])
+                    qz.h(qb[q+n_work])
+                    ##############
+                    #EIGTH TERM:
+                    qz.rz(np.pi/2,qb[p-1+n_work])
+                    qz.h(qb[p-1+n_work])
+                    qz.rz(np.pi/2,qb[p+n_work])
+                    qz.h(qb[p+n_work])
+                    qz.rz(np.pi/2,qb[q-1+n_work])
+                    qz.h(qb[q-1+n_work])
+                    qz.rz(np.pi/2,qb[q+n_work])
+                    qz.h(qb[q+n_work])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q+n_work],qb[n_qubits-1])
+                    qz.crz(theta,qb[control_qubit],qb[n_qubits-1])
+                    qz.cx(qb[p-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[p+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q-1+n_work],qb[n_qubits-1])
+                    qz.cx(qb[q+n_work],qb[n_qubits-1])
+                    qz.h(qb[p-1+n_work])
+                    qz.rz(-np.pi/2,qb[p-1+n_work])
+                    qz.h(qb[p+n_work])
+                    qz.rz(-np.pi/2,qb[p+n_work])
+                    qz.h(qb[q-1+n_work])
+                    qz.rz(-np.pi/2,qb[q-1+n_work])
+                    qz.h(qb[q+n_work])
+                    qz.rz(-np.pi/2,qb[q+n_work])
         self.qc = qz
         self.qb = qb
         return self
