@@ -152,12 +152,7 @@ class MatrixOperator:
             else:
                 full += '{} '.format(chr(9122))
             for j in range(m):
-                if longest > 5:
-                    full += '{:^7}'.format(strings[i][j])
-                elif longest > 3:
-                    full += '{:^5}'.format(strings[i][j])
-                else:
-                    full += '{:^3}'.format(strings[i][j])
+                full += '{:^{width}}'.format(strings[i][j],width=longest+2)
             if i == 0:
                 full += ' {}\n'.format(chr(9124))
             elif i == n-1:
