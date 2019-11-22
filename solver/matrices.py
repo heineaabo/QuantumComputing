@@ -186,24 +186,30 @@ class MatrixOperator:
         strings = []
         longest = 0
         n,m = self.shape
-        fact,new = self._check_fact()
-        if fact == 0:
-            for i in range(n):
-                strings.append([])
-                for j in range(m):
-                    elem = self._convert(self.matrix[i,j])
-                    strings[i].append(elem)
-                    if len(elem) > longest:
-                        longest = len(elem)
-        else:
-            print('{} x'.format(fact))
-            for i in range(n):
-                strings.append([])
-                for j in range(m):
-                    elem = self._convert(new)
-                    strings[i].append(elem)
-                    if len(elem) > longest:
-                        longest = len(elem)
+        for i in range(n):
+            strings.append([])
+            for j in range(m):
+                elem = self._convert(self.matrix[i,j])
+                strings[i].append(elem)
+                if len(elem) > longest:
+                    longest = len(elem)
+        #fact,new = self._check_fact()
+        #if fact == 0:
+        #    for i in range(n):
+        #        strings.append([])
+        #        for j in range(m):
+        #            elem = self._convert(self.matrix[i,j])
+        #            strings[i].append(elem)
+        #            if len(elem) > longest:
+        #                longest = len(elem)
+        #else:
+        #    for i in range(n):
+        #        strings.append([])
+        #        for j in range(m):
+        #            elem = self._convert(new[i,j])
+        #            strings[i].append(elem)
+        #            if len(elem) > longest:
+        #                longest = len(elem)
         return strings, longest
 
     def _check_fact(self):
@@ -279,6 +285,12 @@ class H(MatrixOperator):
         super().__init__()
         self.shape = [2,2]
         self.matrix = np.sqrt(0.5)*np.array([[1,1],[1,-1]])
+
+class S(MatrixOperator):
+    def __init__(self):
+        super().__init__()
+        self.shape = [2,2]
+        self.matrix = np.array([[1,0],[0,0+1j]],dtype=complex)
 
 class CNOT(MatrixOperator):
     def __init__(self):
